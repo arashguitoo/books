@@ -65,11 +65,12 @@
   <div class="tabs">
     <button class="tab on" data-tab="codes">Codes</button>
     <button class="tab" data-tab="setup">Ersteinrichtung</button>
+    <button class="tab" data-tab="gh">GitHub-Verbindung <span id="ghDot">○</span></button>
   </div>
 
   <div id="banner" class="banner">
-    <span><strong>Ungespeicherte Änderungen.</strong> Lade die neue keys.json herunter und ersetze sie im GitHub-Repo – erst dann funktionieren neue Codes bzw. Sperrungen.</span>
-    <button id="dlKeys2">keys.json herunterladen</button>
+    <span id="bannerTxt"><strong>Ungespeicherte Änderungen.</strong> Neue Codes bzw. Sperrungen gelten erst, wenn keys.json auf GitHub gespeichert ist.</span>
+    <span><button id="saveGh2">Auf GitHub speichern</button> <button class="ghost" id="dlKeys2">keys.json herunterladen</button></span>
   </div>
 
   <!-- ================= CODES ================= -->
@@ -170,6 +171,29 @@
     </div>
   </div>
 
+  <!-- ================= GITHUB ================= -->
+  <div id="tab-gh" class="hidden">
+    <section>
+      <h2>GitHub-Verbindung</h2>
+      <p class="note" style="margin-top:0">Damit speichert die Verwaltung book.enc und keys.json selbst im Repo – kein Herunter- und Hochladen nötig. Einmalig einen Token anlegen:</p>
+      <ol class="note" style="color:var(--ink); padding-left:20px">
+        <li>Auf github.com: Profilbild → <b>Settings</b> → ganz unten <b>Developer settings</b> → <b>Personal access tokens</b> → <b>Fine-grained tokens</b> → <b>Generate new token</b>.</li>
+        <li>Name z. B. „Buch-Codes“, Ablaufdatum nach Wunsch.</li>
+        <li><b>Repository access:</b> „Only select repositories“ → <b>books</b>.</li>
+        <li><b>Permissions → Repository permissions → Contents:</b> „Read and write“.</li>
+        <li>„Generate token“ klicken, den Token kopieren und hier einfügen.</li>
+      </ol>
+      <div class="grid">
+        <div class="full"><label for="ghToken">Token</label><input type="password" id="ghToken" dir="ltr" placeholder="github_pat_…" autocomplete="off"></div>
+        <div><label for="ghRepo">Repo</label><input id="ghRepo" dir="ltr" placeholder="arashguitoo/books"></div>
+        <div><label for="ghDir">Ordner im Repo</label><input id="ghDir" dir="ltr" placeholder="walzer"></div>
+      </div>
+      <div class="row"><button id="ghSave">Speichern und testen</button> <button class="ghost" id="ghForget">Token entfernen</button></div>
+      <div id="ghMsg" class="msg"></div>
+      <p class="note">Der Token wird nur in diesem Browser gespeichert. Er erlaubt nur Zugriff auf das Repo „books“.</p>
+    </section>
+  </div>
+
   <!-- ================= SETUP ================= -->
   <div id="tab-setup" class="hidden">
     <section>
@@ -188,7 +212,7 @@
       <div class="row"><button id="setup">Verschlüsseln</button></div>
       <div id="setupMsg" class="msg"></div>
       <div id="setupDl" class="hidden" style="margin-top:14px; padding:14px; background:var(--soft); border-radius:10px">
-        <b>Jetzt beide Dateien herunterladen</b> und auf GitHub in den Ordner <code>walzer/</code> hochladen (Add file → Upload files):
+        <b>Ohne GitHub-Verbindung:</b> beide Dateien herunterladen und auf GitHub in den Ordner hochladen (Add file → Upload files):
         <div class="row">
           <button id="dlEnc">1. book.enc herunterladen</button>
           <button id="dlKeys3">2. keys.json herunterladen</button>
@@ -257,6 +281,76 @@ function newCode(){
   return out.slice(0,4)+"-"+out.slice(4,8)+"-"+out.slice(8);
 }
 
+/* ---------- GitHub ---------- */
+const LS_GH = "buchcodes.gh";
+function ghDefaults(){
+  const m = location.hostname.match(/^([^.]+)\.github\.io$/);
+  const parts = location.pathname.split("/").filter(Boolean); parts.pop(); // drop admin.html
+  if (m && parts.length) return {repo: m[1]+"/"+parts[0], dir: parts.slice(1).join("/")};
+  return {repo:"arashguitoo/books", dir:"walzer"};
+}
+let gh = lsGet(LS_GH, {});
+const ghd = ghDefaults();
+$("ghToken").value = gh.token || ""; $("ghRepo").value = gh.repo || ghd.repo; $("ghDir").value = gh.dir ?? ghd.dir;
+const ghOn = () => !!(gh.token && gh.repo);
+const ghPath = name => (gh.dir ? gh.dir.replace(/^\/|\/$/g,"") + "/" : "") + name;
+function ghDot(){ $("ghDot").textContent = ghOn() ? "●" : "○"; $("ghDot").style.color = ghOn() ? "var(--ok)" : "var(--muted)"; }
+ghDot();
+async function ghApi(path, opt={}){
+  const r = await fetch("https://api.github.com/repos/" + gh.repo + path, {
+    ...opt, cache:"no-store",
+    headers:{Authorization:"Bearer " + gh.token, Accept:"application/vnd.github+json", "X-GitHub-Api-Version":"2022-11-28", ...(opt.headers||{})}
+  });
+  return r;
+}
+async function ghSha(name){
+  const r = await ghApi("/contents/" + ghPath(name).split("/").map(encodeURIComponent).join("/") + "?t=" + Date.now());
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error("GitHub " + r.status);
+  return (await r.json()).sha;
+}
+async function ghPut(name, bytes, message){
+  const sha = await ghSha(name);
+  const body = {message, content: b64e(bytes)}; if (sha) body.sha = sha;
+  const r = await ghApi("/contents/" + ghPath(name).split("/").map(encodeURIComponent).join("/"), {method:"PUT", body: JSON.stringify(body)});
+  if (!r.ok) { let t=""; try{ t=(await r.json()).message; }catch{} throw new Error("GitHub " + r.status + (t? " – "+t : "")); }
+}
+async function ghGetKeys(){
+  const r = await ghApi("/contents/" + ghPath("keys.json").split("/").map(encodeURIComponent).join("/") + "?t=" + Date.now(), {headers:{Accept:"application/vnd.github.raw+json"}});
+  if (r.status === 404) throw new Error("keys.json ist noch nicht im Repo – zuerst die Ersteinrichtung machen.");
+  if (!r.ok) throw new Error("GitHub " + r.status);
+  return JSON.parse(await r.text());
+}
+$("ghSave").onclick = async () => {
+  gh = {token:$("ghToken").value.trim(), repo:$("ghRepo").value.trim().replace(/^https?:\/\/github\.com\//,"").replace(/\/$/,""), dir:$("ghDir").value.trim()};
+  lsSet(LS_GH, gh); ghDot();
+  if (!ghOn()) return msg("ghMsg","Token und Repo eintragen.","err");
+  msg("ghMsg","Teste Verbindung …");
+  try{
+    const r = await ghApi("");
+    if (r.status === 401) throw new Error("Token ungültig oder abgelaufen.");
+    if (r.status === 404) throw new Error("Repo nicht gefunden – Name prüfen bzw. dem Token Zugriff auf dieses Repo geben.");
+    if (!r.ok) throw new Error("GitHub " + r.status);
+    const j = await r.json();
+    if (j.permissions && !j.permissions.push) throw new Error("Token hat keine Schreibrechte (Contents: Read and write).");
+    msg("ghMsg","Verbunden mit " + j.full_name + ". Gespeichert wird in: " + (gh.dir || "(Hauptordner)"), "ok");
+  }catch(e){ msg("ghMsg", e.message, "err"); }
+};
+$("ghForget").onclick = () => { gh = {repo:gh.repo, dir:gh.dir}; lsSet(LS_GH, gh); $("ghToken").value=""; ghDot(); msg("ghMsg","Token entfernt.",""); };
+
+async function saveKeysGh(what){
+  if (!ghOn()) return false;
+  $("bannerTxt").innerHTML = "<strong>Speichere auf GitHub …</strong>";
+  try{
+    await ghPut("keys.json", enc.encode(keysJson()), what || "Codes aktualisiert");
+    setDirty(false); return true;
+  }catch(e){
+    console.error(e);
+    $("bannerTxt").innerHTML = "<strong>Speichern auf GitHub fehlgeschlagen</strong> (" + e.message + "). Erneut versuchen oder keys.json herunterladen.";
+    $("banner").classList.add("on"); return false;
+  }
+}
+
 /* ---------- state ---------- */
 let state = lsGet(LS_STATE, null);    // keys.json content
 let fileKey = null;                   // Uint8Array, only in memory
@@ -264,7 +358,7 @@ let plain = lsGet(LS_CODES, {});      // id -> {code, note}
 let dirty = false;
 let lastBatch = [];
 
-function setDirty(v){ dirty = v; $("banner").classList.toggle("on", v); if (state) lsSet(LS_STATE, {...state, _dirty:v}); }
+function setDirty(v){ dirty = v; if (v) $("bannerTxt").innerHTML = "<strong>Ungespeicherte Änderungen.</strong> Neue Codes bzw. Sperrungen gelten erst, wenn keys.json auf GitHub gespeichert ist."; $("banner").classList.toggle("on", v); if (state) lsSet(LS_STATE, {...state, _dirty:v}); }
 function showKeysInfo(src){
   if (!state) { $("keysInfo").textContent = "Noch keine keys.json geladen."; return; }
   const n = Object.keys(state.codes||{}).length;
@@ -278,6 +372,7 @@ document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
   document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x===t));
   $("tab-codes").classList.toggle("hidden", t.dataset.tab!=="codes");
   $("tab-setup").classList.toggle("hidden", t.dataset.tab!=="setup");
+  $("tab-gh").classList.toggle("hidden", t.dataset.tab!=="gh");
 });
 
 /* ---------- load keys.json ---------- */
@@ -289,9 +384,12 @@ function acceptState(obj, src){
 }
 $("loadRemote").onclick = async () => {
   try{
-    const r = await fetch("keys.json?t="+Date.now(), {cache:"no-store"});
-    if (!r.ok) throw new Error("keys.json wurde im Repo nicht gefunden.");
-    acceptState(await r.json(), "Repo");
+    if (ghOn()) { acceptState(await ghGetKeys(), "GitHub"); }
+    else {
+      const r = await fetch("keys.json?t="+Date.now(), {cache:"no-store"});
+      if (!r.ok) throw new Error("keys.json wurde im Repo nicht gefunden.");
+      acceptState(await r.json(), "Repo");
+    }
     msg("unlockMsg", "", "");
   }catch(e){ msg("unlockMsg", e.message, "err"); }
 };
@@ -359,7 +457,13 @@ $("gen").onclick = async () => {
       lastBatch.push(keys.id);
     }
     lsSet(LS_CODES, plain); setDirty(true);
-    msg("genMsg", `${n} Code(s) erzeugt – jetzt keys.json herunterladen und im Repo ersetzen.`, "ok");
+    if (ghOn()){
+      msg("genMsg", `${n} Code(s) erzeugt. Speichere auf GitHub …`);
+      const ok = await saveKeysGh(`${n} neue Code(s)`);
+      msg("genMsg", ok ? `${n} Code(s) erzeugt und gespeichert – nach ca. 1–2 Minuten aktiv.` : `${n} Code(s) erzeugt, aber noch nicht gespeichert (siehe Hinweis oben).`, ok ? "ok" : "err");
+    } else {
+      msg("genMsg", `${n} Code(s) erzeugt – jetzt keys.json herunterladen und im Repo ersetzen.`, "ok");
+    }
     $("noteNew").value = "";
     renderBatch(); renderAll();
   }catch(e){ console.error(e); msg("genMsg","Fehler beim Erzeugen.","err"); }
@@ -411,6 +515,7 @@ function renderAll(){
       if (!confirm(`Code ${label} sperren? Wer ihn noch nicht benutzt hat, kann danach nicht mehr herunterladen.`)) return;
       delete state.codes[id]; lastBatch = lastBatch.filter(x => x!==id);
       setDirty(true); renderBatch(); renderAll();
+      saveKeysGh("Code gesperrt");
     }));
     tr.append(c, d, n, a); tb.append(tr);
   }
@@ -426,6 +531,7 @@ function download(name, data, type){
 function keysJson(){ return JSON.stringify(state, null, 1); }
 const dlKeys = () => { download("keys.json", keysJson(), "application/json"); setDirty(false); };
 $("dlKeys").onclick = dlKeys; $("dlKeys2").onclick = dlKeys;
+$("saveGh2").onclick = async () => { if (!ghOn()) { document.querySelector('.tab[data-tab=gh]').click(); return; } await saveKeysGh("Codes aktualisiert"); };
 
 function csv(ids){
   const esc = s => `"${String(s??"").replace(/"/g,'""')}"`;
@@ -472,8 +578,23 @@ $("setup").onclick = async () => {
     encBlob = ct;
     setDirty(true); showKeysInfo("neu eingerichtet");
     $("sPw1").value = $("sPw2").value = "";
-    msg("setupMsg","Verschlüsselung fertig.","ok");
-    $("setupDl").classList.remove("hidden");
+    if (ghOn()){
+      try{
+        msg("setupMsg","Lade book.enc auf GitHub hoch …");
+        await ghPut("book.enc", new Uint8Array(ct), "Buch (verschlüsselt)");
+        msg("setupMsg","Lade keys.json auf GitHub hoch …");
+        await ghPut("keys.json", enc.encode(keysJson()), "Einrichtung");
+        setDirty(false);
+        msg("setupMsg","Fertig – beide Dateien sind auf GitHub gespeichert. Jetzt im Reiter „Codes“ Codes erzeugen.","ok");
+      }catch(e){
+        console.error(e);
+        msg("setupMsg","Verschlüsselt, aber Hochladen fehlgeschlagen: " + e.message,"err");
+        $("setupDl").classList.remove("hidden");
+      }
+    } else {
+      msg("setupMsg","Verschlüsselung fertig. Tipp: Mit GitHub-Verbindung wird automatisch hochgeladen.","ok");
+      $("setupDl").classList.remove("hidden");
+    }
     $("work").classList.remove("hidden"); renderAll();
   }catch(e){ console.error(e); msg("setupMsg","Fehler bei der Verschlüsselung.","err"); }
   finally{ $("setup").disabled = false; }
