@@ -185,8 +185,15 @@
         <div><label for="sPw2">Passwort wiederholen</label><input type="password" id="sPw2" autocomplete="new-password"></div>
       </div>
       <p class="note">Das Passwort lässt sich nicht wiederherstellen. Ohne Passwort kannst du keine neuen Codes erzeugen – dann müsstest du die Einrichtung wiederholen (alte Codes würden ungültig).</p>
-      <div class="row"><button id="setup">Verschlüsseln und Dateien erzeugen</button></div>
+      <div class="row"><button id="setup">Verschlüsseln</button></div>
       <div id="setupMsg" class="msg"></div>
+      <div id="setupDl" class="hidden" style="margin-top:14px; padding:14px; background:var(--soft); border-radius:10px">
+        <b>Jetzt beide Dateien herunterladen</b> und auf GitHub in den Ordner <code>walzer/</code> hochladen (Add file → Upload files):
+        <div class="row">
+          <button id="dlEnc">1. book.enc herunterladen</button>
+          <button id="dlKeys3">2. keys.json herunterladen</button>
+        </div>
+      </div>
     </section>
   </div>
 </div>
@@ -352,7 +359,7 @@ $("gen").onclick = async () => {
       lastBatch.push(keys.id);
     }
     lsSet(LS_CODES, plain); setDirty(true);
-    msg("genMsg", `${n} Code(s) erzeugt.`, "ok");
+    msg("genMsg", `${n} Code(s) erzeugt – jetzt keys.json herunterladen und im Repo ersetzen.`, "ok");
     $("noteNew").value = "";
     renderBatch(); renderAll();
   }catch(e){ console.error(e); msg("genMsg","Fehler beim Erzeugen.","err"); }
@@ -435,6 +442,9 @@ $("csvAll").onclick = () => download(`codes-alle-${today()}.csv`, csv(Object.key
 window.addEventListener("beforeunload", e => { if (dirty){ e.preventDefault(); e.returnValue=""; } });
 
 /* ---------- setup ---------- */
+let encBlob = null;
+$("dlEnc").onclick = () => encBlob && download("book.enc", encBlob, "application/octet-stream");
+$("dlKeys3").onclick = dlKeys;
 $("setup").onclick = async () => {
   const f = $("pdfFile").files[0], p1 = $("sPw1").value, p2 = $("sPw2").value;
   if (!f) return msg("setupMsg","Bitte eine PDF auswählen.","err");
@@ -459,11 +469,11 @@ $("setup").onclick = async () => {
     };
     plain = {}; lsSet(LS_CODES, plain);
     fileKey = K;
-    download("book.enc", ct, "application/octet-stream");
-    setTimeout(() => download("keys.json", keysJson(), "application/json"), 600);
-    setDirty(false); showKeysInfo("neu eingerichtet");
+    encBlob = ct;
+    setDirty(true); showKeysInfo("neu eingerichtet");
     $("sPw1").value = $("sPw2").value = "";
-    msg("setupMsg","Fertig. book.enc und keys.json wurden heruntergeladen – beide ins Repo hochladen. Die Konsole ist entsperrt.","ok");
+    msg("setupMsg","Verschlüsselung fertig.","ok");
+    $("setupDl").classList.remove("hidden");
     $("work").classList.remove("hidden"); renderAll();
   }catch(e){ console.error(e); msg("setupMsg","Fehler bei der Verschlüsselung.","err"); }
   finally{ $("setup").disabled = false; }

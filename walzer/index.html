@@ -108,7 +108,7 @@
     $("btn").disabled = true;
     try{
       setMsg("در حال بررسی کد…");
-      await loadCfg();
+      try { await loadCfg(); } catch { setMsg("سامانهٔ دریافت هنوز آماده نیست. لطفاً کمی بعد دوباره امتحان کنید.", "err"); return; }
       const {kek, id} = await deriveCode(code, cfg.codeSalt, cfg.iter);
       const entry = cfg.codes[id];
       if (!entry) { setMsg("این کد معتبر نیست یا غیرفعال شده است.", "err"); return; }
