@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Buch-Codes – Verwaltung</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f6f5f2; --card:#fff; --ink:#22252a; --muted:#6b7078; --line:#e3e1dc;
+    --accent:#2f5d62; --soft:#eef3f3; --err:#9b2c2c; --ok:#2e6b3f; --warn:#8a5a12;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; font-size:15px; line-height:1.55}
+  .wrap{max-width:900px; margin:0 auto; padding:32px 20px 60px}
+  h1{font-size:1.35rem; margin:0 0 4px}
+  .lead{color:var(--muted); margin:0 0 24px}
+  .tabs{display:flex; gap:6px; margin-bottom:16px}
+  .tab{padding:8px 14px; border:1px solid var(--line); border-radius:8px; background:var(--card);
+    cursor:pointer; font:inherit; color:var(--muted)}
+  .tab.on{background:var(--accent); color:#fff; border-color:var(--accent)}
+  section{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:24px; margin-bottom:16px}
+  section h2{font-size:1.05rem; margin:0 0 14px}
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+  .full{grid-column:1/-1}
+  label{display:block; font-size:.85rem; font-weight:600; margin-bottom:5px}
+  input,textarea,select{width:100%; font:inherit; padding:9px 11px; border:1px solid var(--line);
+    border-radius:8px; background:#fbfaf8; color:var(--ink)}
+  textarea{min-height:230px; resize:vertical}
+  textarea.fa{direction:rtl; font-family:Vazirmatn,Tahoma,sans-serif; line-height:1.9}
+  input:focus,textarea:focus{outline:none; border-color:var(--accent); background:#fff}
+  .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:14px}
+  button{font:inherit; font-weight:500; padding:9px 15px; border-radius:8px; border:1px solid var(--accent);
+    background:var(--accent); color:#fff; cursor:pointer}
+  button.ghost{background:#fff; color:var(--accent)}
+  button.small{padding:4px 10px; font-size:.85rem}
+  button.danger{border-color:var(--err); color:var(--err); background:#fff}
+  button:disabled{opacity:.5; cursor:default}
+  .note{color:var(--muted); font-size:.85rem}
+  .msg{font-size:.9rem; margin-top:10px; min-height:1.3em}
+  .msg.err{color:var(--err)} .msg.ok{color:var(--ok)}
+  .banner{display:none; background:#fdf6e8; border:1px solid #ecd9b0; color:var(--warn);
+    border-radius:10px; padding:12px 16px; margin-bottom:16px}
+  .banner.on{display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap}
+  table{width:100%; border-collapse:collapse; font-size:.9rem}
+  th,td{text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); vertical-align:middle}
+  th{font-size:.8rem; color:var(--muted); font-weight:600}
+  td.date{white-space:nowrap}
+  td.code{font-family:ui-monospace,Menlo,Consolas,monospace; letter-spacing:.04em; white-space:nowrap}
+  td input{padding:5px 8px; font-size:.88rem}
+  .new td{background:var(--soft)}
+  .hidden{display:none}
+  .stat{color:var(--muted); font-size:.9rem}
+  @media (max-width:640px){ .grid{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Buch-Codes – Verwaltung</h1>
+  <p class="lead">Codes erzeugen, Nachrichten für Käufer vorbereiten, Codes sperren.</p>
+
+  <div class="tabs">
+    <button class="tab on" data-tab="codes">Codes</button>
+    <button class="tab" data-tab="setup">Ersteinrichtung</button>
+  </div>
+
+  <div id="banner" class="banner">
+    <span><strong>Ungespeicherte Änderungen.</strong> Lade die neue keys.json herunter und ersetze sie im GitHub-Repo – erst dann funktionieren neue Codes bzw. Sperrungen.</span>
+    <button id="dlKeys2">keys.json herunterladen</button>
+  </div>
+
+  <!-- ================= CODES ================= -->
+  <div id="tab-codes">
+    <section id="unlockBox">
+      <h2>Entsperren</h2>
+      <div class="grid">
+        <div class="full">
+          <label>keys.json</label>
+          <div class="row" style="margin-top:0">
+            <button class="ghost" id="loadRemote">Aus dem Repo laden</button>
+            <span class="note">oder</span>
+            <input type="file" id="keysFile" accept=".json,application/json" style="width:auto">
+          </div>
+          <div class="note" id="keysInfo" style="margin-top:6px"></div>
+        </div>
+        <div class="full">
+          <label for="adminPw">Admin-Passwort</label>
+          <input type="password" id="adminPw" autocomplete="current-password">
+        </div>
+      </div>
+      <div class="row"><button id="unlock">Entsperren</button></div>
+      <div id="unlockMsg" class="msg"></div>
+    </section>
+
+    <div id="work" class="hidden">
+      <section>
+        <h2>Neue Codes erzeugen</h2>
+        <div class="grid">
+          <div>
+            <label for="count">Anzahl</label>
+            <input type="number" id="count" min="1" max="500" value="1">
+          </div>
+          <div>
+            <label for="noteNew">Notiz (optional, z. B. Käufer – bleibt nur auf diesem Gerät)</label>
+            <input id="noteNew" placeholder="z. B. PayPal 21.11.">
+          </div>
+        </div>
+        <div class="row">
+          <button id="gen">Codes erzeugen</button>
+          <span id="genMsg" class="msg" style="margin:0"></span>
+        </div>
+      </section>
+
+      <section id="batchBox" class="hidden">
+        <h2>Gerade erzeugt</h2>
+        <table>
+          <thead><tr><th>Code</th><th>Notiz</th><th></th></tr></thead>
+          <tbody id="batchBody"></tbody>
+        </table>
+        <div class="row">
+          <button class="ghost" id="copyBatchCodes">Alle Codes kopieren</button>
+          <button class="ghost" id="copyBatchMsgs">Alle Nachrichten kopieren</button>
+          <button class="ghost" id="csvBatch">Als CSV speichern</button>
+        </div>
+      </section>
+
+      <section>
+        <h2>Nachricht an Käufer</h2>
+        <div class="grid">
+          <div class="full">
+            <label for="dlUrl">Adresse der Download-Seite</label>
+            <input id="dlUrl" dir="ltr">
+          </div>
+          <div class="full">
+            <label for="tpl">Vorlage (Platzhalter: {LINK} {CODE} {TITEL})</label>
+            <textarea id="tpl" class="fa"></textarea>
+          </div>
+          <div>
+            <label for="subj">Betreff</label>
+            <input id="subj" class="fa" dir="rtl" style="font-family:Vazirmatn,Tahoma,sans-serif">
+          </div>
+          <div>
+            <label for="mailTo">E-Mail des Käufers (für „E-Mail öffnen“)</label>
+            <input id="mailTo" type="email" dir="ltr" placeholder="optional">
+          </div>
+        </div>
+        <div class="row">
+          <button class="ghost small" id="resetTpl">Vorlage zurücksetzen</button>
+          <span class="note">Die Vorlage wird auf diesem Gerät gespeichert.</span>
+        </div>
+      </section>
+
+      <section>
+        <h2>Alle Codes <span class="stat" id="stat"></span></h2>
+        <div class="row" style="margin-top:0; margin-bottom:10px">
+          <input id="filter" placeholder="Suchen (Code oder Notiz)" style="max-width:280px">
+          <button class="ghost small" id="csvAll">Alle als CSV</button>
+        </div>
+        <table>
+          <thead><tr><th>Code</th><th>Erstellt</th><th>Notiz</th><th></th></tr></thead>
+          <tbody id="allBody"></tbody>
+        </table>
+        <p class="note">Codes, die auf einem anderen Gerät erzeugt wurden, erscheinen hier ohne Klartext (nur die interne Kennung) – sie lassen sich trotzdem sperren.</p>
+      </section>
+
+      <div class="row"><button id="dlKeys">keys.json herunterladen</button></div>
+    </div>
+  </div>
+
+  <!-- ================= SETUP ================= -->
+  <div id="tab-setup" class="hidden">
+    <section>
+      <h2>Ersteinrichtung – PDF verschlüsseln</h2>
+      <p class="note" style="margin-top:0">Nur einmal pro Buch nötig. Die PDF wird hier im Browser verschlüsselt und verlässt dein Gerät nicht. Danach lädst du <b>book.enc</b> und <b>keys.json</b> ins Repo – niemals die unverschlüsselte PDF.</p>
+      <div class="grid">
+        <div class="full"><label>PDF-Datei</label><input type="file" id="pdfFile" accept="application/pdf"></div>
+        <div class="full"><label for="sTitle">Titel (wird auf der Download-Seite angezeigt)</label>
+          <input id="sTitle" dir="rtl" style="font-family:Vazirmatn,Tahoma,sans-serif" value="مبارزه برای سیاستی محترمانه"></div>
+        <div class="full"><label for="sName">Dateiname beim Herunterladen</label>
+          <input id="sName" dir="ltr" value="Walzer_Mobarezeh-baraye-siasati-mohtaramaneh.pdf"></div>
+        <div><label for="sPw1">Admin-Passwort (mind. 12 Zeichen)</label><input type="password" id="sPw1" autocomplete="new-password"></div>
+        <div><label for="sPw2">Passwort wiederholen</label><input type="password" id="sPw2" autocomplete="new-password"></div>
+      </div>
+      <p class="note">Das Passwort lässt sich nicht wiederherstellen. Ohne Passwort kannst du keine neuen Codes erzeugen – dann müsstest du die Einrichtung wiederholen (alte Codes würden ungültig).</p>
+      <div class="row"><button id="setup">Verschlüsseln und Dateien erzeugen</button></div>
+      <div id="setupMsg" class="msg"></div>
+    </section>
+  </div>
+</div>
+
+<script>
+(() => {
+"use strict";
+const ITER = 600000;
+const ALPHA = "23456789ABCDEFGHJKMNPQRSTVWXYZ";
+const LS_STATE = "buchcodes.state";     // working copy of keys.json
+const LS_CODES = "buchcodes.plain";     // id -> {code, note}
+const LS_TPL   = "buchcodes.tpl";
+const $ = id => document.getElementById(id);
+const enc = new TextEncoder();
+const b64e = b => { const u=new Uint8Array(b); let s=""; for (let i=0;i<u.length;i+=0x8000) s+=String.fromCharCode(...u.subarray(i,i+0x8000)); return btoa(s); };
+const b64d = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+const hex = b => [...new Uint8Array(b)].map(x => x.toString(16).padStart(2,"0")).join("");
+const rand = n => crypto.getRandomValues(new Uint8Array(n));
+const today = () => new Date().toISOString().slice(0,10);
+const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+
+const DEFAULT_SUBJ = "دریافت کتاب «{TITEL}»";
+const DEFAULT_TPL =
+`سلام و وقت بخیر،
+
+از خرید شما صمیمانه سپاسگزارم. پرداخت شما از طریق پی‌پال به دستم رسید و اکنون سفارش‌تان را تحویل می‌دهم.
+
+نسخهٔ الکترونیکی کتاب «مبارزه برای سیاستی محترمانه – دربارهٔ «لیبرال» به‌عنوان یک صفت» نوشتهٔ مایکل والزر، با ترجمهٔ دومان بهرامی، را می‌توانید از طریق لینک زیر دریافت کنید:
+
+لینک دانلود: {LINK}
+کد دریافت: {CODE}
+
+این روش دریافت کاملاً امن است: فایل به‌صورت رمزگذاری‌شده نگهداری می‌شود، تنها با کد اختصاصی شما باز می‌شود و هیچ اطلاعات شخصی‌ای از شما خواسته نمی‌شود. کافی است لینک را باز کنید، کد را وارد کنید و فایل PDF را روی دستگاه خود ذخیره کنید. خواهشمندم این کد را در اختیار دیگران قرار ندهید.
+
+اگر ترجیح می‌دهید کتاب را از طریق ایمیل دریافت کنید، کافی است نشانی ایمیل خود را برایم بفرستید تا فایل را برایتان ارسال کنم.
+
+در صورت هر پرسش یا مشکلی، خوشحال می‌شوم در خدمت‌تان باشم.
+
+با آرزوی مطالعه‌ای لذت‌بخش،
+
+با احترام،
+آرش گیتو`;
+
+/* ---------- crypto ---------- */
+async function pbkdf(secret, salt, bitsLen){
+  const base = await crypto.subtle.importKey("raw", enc.encode(secret), "PBKDF2", false, ["deriveBits"]);
+  return new Uint8Array(await crypto.subtle.deriveBits({name:"PBKDF2", hash:"SHA-256", salt, iterations:ITER}, base, bitsLen));
+}
+async function aesKey(raw, usage){ return crypto.subtle.importKey("raw", raw, "AES-GCM", false, usage); }
+async function gcmEnc(keyRaw, data){ const iv=rand(12); const k=await aesKey(keyRaw,["encrypt"]); return {iv:b64e(iv), ct:b64e(await crypto.subtle.encrypt({name:"AES-GCM",iv},k,data))}; }
+async function gcmDec(keyRaw, ivB64, ctB64){ const k=await aesKey(keyRaw,["decrypt"]); return new Uint8Array(await crypto.subtle.decrypt({name:"AES-GCM",iv:b64d(ivB64)},k,b64d(ctB64))); }
+async function codeKeys(code, saltB64){
+  const bits = await pbkdf(code, b64d(saltB64), 512);
+  return {kek: bits.slice(0,32), id: hex(await crypto.subtle.digest("SHA-256", bits.slice(32))).slice(0,32)};
+}
+function newCode(){
+  // rejection sampling for uniform distribution
+  let out = "";
+  while (out.length < 12){ for (const b of rand(16)){ if (b < 240 && out.length < 12) out += ALPHA[b % 30]; } }
+  return out.slice(0,4)+"-"+out.slice(4,8)+"-"+out.slice(8);
+}
+
+/* ---------- state ---------- */
+let state = lsGet(LS_STATE, null);    // keys.json content
+let fileKey = null;                   // Uint8Array, only in memory
+let plain = lsGet(LS_CODES, {});      // id -> {code, note}
+let dirty = false;
+let lastBatch = [];
+
+function setDirty(v){ dirty = v; $("banner").classList.toggle("on", v); if (state) lsSet(LS_STATE, {...state, _dirty:v}); }
+function showKeysInfo(src){
+  if (!state) { $("keysInfo").textContent = "Noch keine keys.json geladen."; return; }
+  const n = Object.keys(state.codes||{}).length;
+  $("keysInfo").textContent = `Geladen (${src}): „${state.title||"–"}“, ${n} Code(s).`;
+}
+if (state){ dirty = !!state._dirty; delete state._dirty; showKeysInfo("lokal gespeichert"); $("banner").classList.toggle("on", dirty); }
+else showKeysInfo();
+
+/* ---------- tabs ---------- */
+document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
+  document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x===t));
+  $("tab-codes").classList.toggle("hidden", t.dataset.tab!=="codes");
+  $("tab-setup").classList.toggle("hidden", t.dataset.tab!=="setup");
+});
+
+/* ---------- load keys.json ---------- */
+function acceptState(obj, src){
+  if (!obj || !obj.admin || !obj.codeSalt) throw new Error("Das ist keine gültige keys.json.");
+  if (dirty && !confirm("Es gibt ungespeicherte Änderungen. Trotzdem die geladene keys.json übernehmen?")) return;
+  state = obj; fileKey = null; $("work").classList.add("hidden");
+  setDirty(false); showKeysInfo(src);
+}
+$("loadRemote").onclick = async () => {
+  try{
+    const r = await fetch("keys.json?t="+Date.now(), {cache:"no-store"});
+    if (!r.ok) throw new Error("keys.json wurde im Repo nicht gefunden.");
+    acceptState(await r.json(), "Repo");
+    msg("unlockMsg", "", "");
+  }catch(e){ msg("unlockMsg", e.message, "err"); }
+};
+$("keysFile").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try{ acceptState(JSON.parse(await f.text()), "Datei"); msg("unlockMsg","",""); }
+  catch(err){ msg("unlockMsg", err.message, "err"); }
+};
+
+/* ---------- unlock ---------- */
+function msg(id, t, cls){ const m=$(id); m.textContent=t; m.className="msg "+(cls||""); }
+$("unlock").onclick = async () => {
+  if (!state){ msg("unlockMsg","Bitte zuerst keys.json laden.","err"); return; }
+  $("unlock").disabled = true; msg("unlockMsg","Prüfe Passwort …");
+  try{
+    const kek = await pbkdf($("adminPw").value, b64d(state.admin.salt), 256);
+    fileKey = await gcmDec(kek, state.admin.iv, state.admin.wk);
+    $("adminPw").value = "";
+    msg("unlockMsg","Entsperrt.","ok");
+    $("work").classList.remove("hidden");
+    renderAll();
+  }catch{ msg("unlockMsg","Falsches Passwort (oder keys.json passt nicht).","err"); }
+  finally{ $("unlock").disabled = false; }
+};
+
+/* ---------- template ---------- */
+const tplStore = lsGet(LS_TPL, {});
+$("tpl").value = tplStore.tpl || DEFAULT_TPL;
+$("subj").value = tplStore.subj || DEFAULT_SUBJ;
+$("dlUrl").value = tplStore.url || new URL("./", location.href).href;
+const saveTpl = () => lsSet(LS_TPL, {tpl:$("tpl").value, subj:$("subj").value, url:$("dlUrl").value});
+["tpl","subj","dlUrl"].forEach(id => $(id).addEventListener("input", saveTpl));
+$("resetTpl").onclick = () => { $("tpl").value = DEFAULT_TPL; $("subj").value = DEFAULT_SUBJ; saveTpl(); };
+
+function fill(s, code){
+  const link = $("dlUrl").value.trim() + "#" + code;
+  return s.replaceAll("{LINK}", link).replaceAll("{CODE}", code).replaceAll("{TITEL}", state?.title || "");
+}
+const message = code => fill($("tpl").value, code);
+const subject = code => fill($("subj").value, code);
+
+async function copy(text, btn){
+  try{ await navigator.clipboard.writeText(text); }
+  catch{ const t=document.createElement("textarea"); t.value=text; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); }
+  if (btn){ const o=btn.textContent; btn.textContent="Kopiert ✓"; setTimeout(()=>btn.textContent=o,1300); }
+}
+function openMail(code){
+  const to = $("mailTo").value.trim();
+  location.href = "mailto:"+encodeURIComponent(to)+"?subject="+encodeURIComponent(subject(code))+"&body="+encodeURIComponent(message(code));
+}
+
+/* ---------- generate ---------- */
+$("gen").onclick = async () => {
+  const n = Math.max(1, Math.min(500, parseInt($("count").value,10)||1));
+  const note = $("noteNew").value.trim();
+  $("gen").disabled = true; lastBatch = [];
+  try{
+    for (let i=0;i<n;i++){
+      msg("genMsg", `Erzeuge ${i+1} von ${n} …`);
+      let code, keys;
+      do { code = newCode(); keys = await codeKeys(code.replace(/-/g,""), state.codeSalt); } while (state.codes[keys.id]);
+      const w = await gcmEnc(keys.kek, fileKey);
+      state.codes[keys.id] = {iv:w.iv, wk:w.ct, d:today()};
+      plain[keys.id] = {code, note: n>1 && note ? `${note} (${i+1})` : note};
+      lastBatch.push(keys.id);
+    }
+    lsSet(LS_CODES, plain); setDirty(true);
+    msg("genMsg", `${n} Code(s) erzeugt.`, "ok");
+    $("noteNew").value = "";
+    renderBatch(); renderAll();
+  }catch(e){ console.error(e); msg("genMsg","Fehler beim Erzeugen.","err"); }
+  finally{ $("gen").disabled = false; }
+};
+
+/* ---------- rendering ---------- */
+function rowActions(id){
+  const td = document.createElement("td"); td.style.whiteSpace="nowrap"; td.style.textAlign="right";
+  const p = plain[id];
+  if (p){
+    const b1 = btn("Nachricht kopieren","ghost small", e => copy(message(p.code), e.target));
+    const b2 = btn("E-Mail öffnen","ghost small", () => openMail(p.code));
+    td.append(b1, " ", b2, " ");
+  }
+  return td;
+}
+function btn(t, cls, fn){ const b=document.createElement("button"); b.textContent=t; b.className=cls; b.onclick=fn; return b; }
+function noteInput(id){
+  const i = document.createElement("input"); i.value = plain[id]?.note || ""; i.placeholder = "Notiz";
+  i.oninput = () => { plain[id] = {...(plain[id]||{code:null}), note:i.value}; lsSet(LS_CODES, plain); };
+  return i;
+}
+function renderBatch(){
+  const tb = $("batchBody"); tb.innerHTML = "";
+  $("batchBox").classList.toggle("hidden", !lastBatch.length);
+  for (const id of lastBatch){
+    const tr = document.createElement("tr");
+    const c = document.createElement("td"); c.className="code"; c.textContent = plain[id].code;
+    const n = document.createElement("td"); n.append(noteInput(id));
+    tr.append(c, n, rowActions(id)); tb.append(tr);
+  }
+}
+function renderAll(){
+  const tb = $("allBody"); tb.innerHTML = "";
+  const q = $("filter").value.trim().toUpperCase();
+  const ids = Object.keys(state.codes).sort((a,b) => (state.codes[b].d||"").localeCompare(state.codes[a].d||""));
+  $("stat").textContent = `(${ids.length} aktiv)`;
+  for (const id of ids){
+    const p = plain[id];
+    const label = p?.code || ("ID " + id.slice(0,8) + "…");
+    if (q && !label.toUpperCase().includes(q) && !(p?.note||"").toUpperCase().includes(q)) continue;
+    const tr = document.createElement("tr"); if (lastBatch.includes(id)) tr.className = "new";
+    const c = document.createElement("td"); c.className="code"; c.textContent = label;
+    const d = document.createElement("td"); d.className="date"; d.textContent = state.codes[id].d || "";
+    const n = document.createElement("td"); n.append(noteInput(id));
+    const a = rowActions(id);
+    a.append(btn("Sperren","danger small", () => {
+      if (!confirm(`Code ${label} sperren? Wer ihn noch nicht benutzt hat, kann danach nicht mehr herunterladen.`)) return;
+      delete state.codes[id]; lastBatch = lastBatch.filter(x => x!==id);
+      setDirty(true); renderBatch(); renderAll();
+    }));
+    tr.append(c, d, n, a); tb.append(tr);
+  }
+}
+$("filter").oninput = () => state && fileKey && renderAll();
+
+/* ---------- exports ---------- */
+function download(name, data, type){
+  const url = URL.createObjectURL(new Blob([data], {type}));
+  const a = document.createElement("a"); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+function keysJson(){ return JSON.stringify(state, null, 1); }
+const dlKeys = () => { download("keys.json", keysJson(), "application/json"); setDirty(false); };
+$("dlKeys").onclick = dlKeys; $("dlKeys2").onclick = dlKeys;
+
+function csv(ids){
+  const esc = s => `"${String(s??"").replace(/"/g,'""')}"`;
+  const lines = [["Code","Erstellt","Notiz","Link"].map(esc).join(";")];
+  for (const id of ids){ const p = plain[id]; if (!p?.code) continue;
+    lines.push([p.code, state.codes[id]?.d, p.note, $("dlUrl").value.trim()+"#"+p.code].map(esc).join(";")); }
+  return "﻿" + lines.join("\r\n");
+}
+$("copyBatchCodes").onclick = e => copy(lastBatch.map(id => plain[id].code).join("\n"), e.target);
+$("copyBatchMsgs").onclick = e => copy(lastBatch.map(id => message(plain[id].code)).join("\n\n――――――――――\n\n"), e.target);
+$("csvBatch").onclick = () => download(`codes-${today()}.csv`, csv(lastBatch), "text/csv");
+$("csvAll").onclick = () => download(`codes-alle-${today()}.csv`, csv(Object.keys(state.codes)), "text/csv");
+
+window.addEventListener("beforeunload", e => { if (dirty){ e.preventDefault(); e.returnValue=""; } });
+
+/* ---------- setup ---------- */
+$("setup").onclick = async () => {
+  const f = $("pdfFile").files[0], p1 = $("sPw1").value, p2 = $("sPw2").value;
+  if (!f) return msg("setupMsg","Bitte eine PDF auswählen.","err");
+  if (p1.length < 12) return msg("setupMsg","Das Passwort braucht mindestens 12 Zeichen.","err");
+  if (p1 !== p2) return msg("setupMsg","Die Passwörter stimmen nicht überein.","err");
+  if (state && Object.keys(state.codes||{}).length &&
+      !confirm("Es gibt bereits Codes. Eine neue Einrichtung macht alle bisherigen Codes ungültig. Fortfahren?")) return;
+  $("setup").disabled = true;
+  try{
+    msg("setupMsg","Verschlüssele PDF …");
+    const pdf = new Uint8Array(await f.arrayBuffer());
+    const K = rand(32);
+    const fileIv = rand(12);
+    const ct = await crypto.subtle.encrypt({name:"AES-GCM", iv:fileIv}, await aesKey(K,["encrypt"]), pdf);
+    msg("setupMsg","Sichere Admin-Schlüssel …");
+    const aSalt = rand(16);
+    const w = await gcmEnc(await pbkdf(p1, aSalt, 256), K);
+    state = {
+      v:1, title:$("sTitle").value.trim(), fileName:$("sName").value.trim() || "book.pdf",
+      file:"book.enc", fileVersion: Date.now(), fileIv:b64e(fileIv), iter:ITER,
+      codeSalt:b64e(rand(16)), admin:{salt:b64e(aSalt), iv:w.iv, wk:w.ct}, codes:{}
+    };
+    plain = {}; lsSet(LS_CODES, plain);
+    fileKey = K;
+    download("book.enc", ct, "application/octet-stream");
+    setTimeout(() => download("keys.json", keysJson(), "application/json"), 600);
+    setDirty(false); showKeysInfo("neu eingerichtet");
+    $("sPw1").value = $("sPw2").value = "";
+    msg("setupMsg","Fertig. book.enc und keys.json wurden heruntergeladen – beide ins Repo hochladen. Die Konsole ist entsperrt.","ok");
+    $("work").classList.remove("hidden"); renderAll();
+  }catch(e){ console.error(e); msg("setupMsg","Fehler bei der Verschlüsselung.","err"); }
+  finally{ $("setup").disabled = false; }
+};
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>دریافت کتاب</title>
+<style>
+  :root{
+    --bg:#f6f5f2; --card:#ffffff; --ink:#22252a; --muted:#6b7078;
+    --line:#e3e1dc; --accent:#2f5d62; --accent-ink:#ffffff;
+    --ok:#2e6b3f; --err:#9b2c2c;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+    background:var(--bg); color:var(--ink);
+    font-family:Vazirmatn, "Segoe UI", Tahoma, "Noto Naskh Arabic", "Geeza Pro", "Segoe UI", sans-serif; line-height:1.8; padding:24px;
+  }
+  .card{
+    width:100%; max-width:460px; background:var(--card); border:1px solid var(--line);
+    border-radius:14px; padding:36px 32px;
+  }
+  h1{font-size:1.25rem; font-weight:700; margin:0 0 4px}
+  .sub{color:var(--muted); font-size:.95rem; margin:0 0 28px}
+  label{display:block; font-size:.9rem; font-weight:500; margin-bottom:8px}
+  input{
+    width:100%; font:inherit; font-size:1.15rem; letter-spacing:.12em; text-align:center;
+    direction:ltr; padding:12px 14px; border:1px solid var(--line); border-radius:10px;
+    background:#fbfaf8; color:var(--ink); text-transform:uppercase;
+  }
+  input:focus{outline:none; border-color:var(--accent); background:#fff}
+  button{
+    width:100%; margin-top:16px; font:inherit; font-weight:500; font-size:1rem;
+    padding:12px; border:0; border-radius:10px; background:var(--accent); color:var(--accent-ink);
+    cursor:pointer;
+  }
+  button:disabled{opacity:.55; cursor:default}
+  .msg{margin-top:18px; font-size:.92rem; min-height:1.5em}
+  .msg.err{color:var(--err)}
+  .msg.ok{color:var(--ok)}
+  .hint{margin-top:26px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:.85rem}
+  a.again{color:var(--accent)}
+</style>
+</head>
+<body>
+<main class="card">
+  <h1 id="title">دریافت کتاب</h1>
+  <p class="sub">برای دریافت نسخهٔ الکترونیکی، کد دریافتی را وارد کنید.</p>
+
+  <form id="f" autocomplete="off">
+    <label for="code">کد دریافت</label>
+    <input id="code" placeholder="XXXX-XXXX-XXXX" maxlength="20" spellcheck="false" autocapitalize="characters">
+    <button id="btn" type="submit">دریافت فایل</button>
+  </form>
+  <div id="msg" class="msg" role="status"></div>
+
+  <div class="hint">
+    کد را در اختیار دیگران قرار ندهید. اگر در دریافت فایل مشکلی داشتید، به همان نشانی‌ای که کد را از آن دریافت کرده‌اید پیام دهید.
+  </div>
+</main>
+
+<script>
+(() => {
+  const ALPHA = "23456789ABCDEFGHJKMNPQRSTVWXYZ";
+  const $ = id => document.getElementById(id);
+  const enc = new TextEncoder();
+  const b64d = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  const hex = b => [...new Uint8Array(b)].map(x => x.toString(16).padStart(2,"0")).join("");
+  const toFa = n => String(n).replace(/\d/g, d => "۰۱۲۳۴۵۶۷۸۹"[d]);
+
+  function normalize(c){
+    return c.toUpperCase()
+      .replace(/[۰-۹]/g, d => "0123456789"["۰۱۲۳۴۵۶۷۸۹".indexOf(d)])
+      .replace(/[^A-Z0-9]/g, "")
+      .replace(/O/g,"0").replace(/[IL]/g,"1");
+  }
+
+  async function deriveCode(code, saltB64, iter){
+    const base = await crypto.subtle.importKey("raw", enc.encode(code), "PBKDF2", false, ["deriveBits"]);
+    const bits = new Uint8Array(await crypto.subtle.deriveBits(
+      {name:"PBKDF2", hash:"SHA-256", salt:b64d(saltB64), iterations:iter}, base, 512));
+    const kek = await crypto.subtle.importKey("raw", bits.slice(0,32), "AES-GCM", false, ["decrypt"]);
+    const id = hex(await crypto.subtle.digest("SHA-256", bits.slice(32))).slice(0,32);
+    return {kek, id};
+  }
+
+  let cfg = null;
+  async function loadCfg(){
+    const r = await fetch("keys.json?t=" + Date.now(), {cache:"no-store"});
+    if (!r.ok) throw new Error("cfg");
+    cfg = await r.json();
+    if (cfg.title) { $("title").textContent = cfg.title; document.title = "دریافت کتاب – " + cfg.title; }
+  }
+  loadCfg().catch(() => {});
+
+  // Auto-fill code from link (#CODE)
+  if (location.hash.length > 1) $("code").value = decodeURIComponent(location.hash.slice(1));
+
+  const setMsg = (t, cls="") => { const m=$("msg"); m.textContent=t; m.className="msg "+cls; };
+
+  $("f").addEventListener("submit", async e => {
+    e.preventDefault();
+    const code = normalize($("code").value);
+    if (code.length !== 12 || [...code].some(c => !ALPHA.includes(c))) {
+      setMsg("کد واردشده معتبر نیست. لطفاً آن را دوباره بررسی کنید.", "err"); return;
+    }
+    $("btn").disabled = true;
+    try{
+      setMsg("در حال بررسی کد…");
+      await loadCfg();
+      const {kek, id} = await deriveCode(code, cfg.codeSalt, cfg.iter);
+      const entry = cfg.codes[id];
+      if (!entry) { setMsg("این کد معتبر نیست یا غیرفعال شده است.", "err"); return; }
+
+      const kRaw = await crypto.subtle.decrypt({name:"AES-GCM", iv:b64d(entry.iv)}, kek, b64d(entry.wk));
+      const fileKey = await crypto.subtle.importKey("raw", kRaw, "AES-GCM", false, ["decrypt"]);
+
+      setMsg("در حال دریافت فایل…");
+      const r = await fetch(cfg.file + "?v=" + (cfg.fileVersion || 1));
+      if (!r.ok) throw new Error("file");
+      const data = await r.arrayBuffer();
+
+      setMsg("در حال آماده‌سازی فایل…");
+      const pdf = await crypto.subtle.decrypt({name:"AES-GCM", iv:b64d(cfg.fileIv)}, fileKey, data);
+
+      const blob = new Blob([pdf], {type:"application/pdf"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = cfg.fileName || "book.pdf";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+
+      const mb = (pdf.byteLength / 1048576).toFixed(1);
+      $("msg").className = "msg ok";
+      $("msg").innerHTML = "فایل آماده است (" + toFa(mb) + " مگابایت). اگر دانلود خودکار شروع نشد، <a class='again' href='"+url+"' download='"+(cfg.fileName||"book.pdf")+"'>اینجا را بزنید</a>.";
+    } catch(err){
+      console.error(err);
+      setMsg("خطایی رخ داد. لطفاً چند دقیقهٔ دیگر دوباره امتحان کنید.", "err");
+    } finally {
+      $("btn").disabled = false;
+    }
+  });
+})();
+</script>
+</body>
+</html>
