@@ -41,6 +41,9 @@
   .msg.ok{color:var(--ok)}
   .hint{margin-top:26px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:.85rem}
   a.again{color:var(--accent)}
+  a.save{display:none; width:100%; margin-top:16px; text-align:center; text-decoration:none; font-weight:700;
+    padding:14px; border-radius:10px; background:#2e6b3f; color:#fff; font-size:1.05rem}
+  a.save.on{display:block}
 </style>
 </head>
 <body>
@@ -54,9 +57,10 @@
     <button id="btn" type="submit">دریافت فایل</button>
   </form>
   <div id="msg" class="msg" role="status"></div>
+  <a id="save" class="save" href="#">ذخیرهٔ فایل PDF</a>
 
   <div class="hint">
-    کد را در اختیار دیگران قرار ندهید. اگر در دریافت فایل مشکلی داشتید، به همان نشانی‌ای که کد را از آن دریافت کرده‌اید پیام دهید.
+    کد را در اختیار دیگران قرار ندهید. اگر لینک را از داخل یک برنامه (مثلاً پی‌پال یا ایمیل) باز کرده‌اید و فایل ذخیره نمی‌شود، لینک را در مرورگر Safari یا Chrome باز کنید. اگر باز هم مشکلی بود، به همان نشانی‌ای که کد را از آن دریافت کرده‌اید پیام دهید.
   </div>
 </main>
 
@@ -126,14 +130,12 @@
 
       const blob = new Blob([pdf], {type:"application/pdf"});
       const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = cfg.fileName || "book.pdf";
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
-
+      const save = $("save");
+      save.href = url; save.download = cfg.fileName || "book.pdf";
+      save.classList.add("on");
+      $("f").style.display = "none";
       const mb = (pdf.byteLength / 1048576).toFixed(1);
-      $("msg").className = "msg ok";
-      $("msg").innerHTML = "فایل آماده است (" + toFa(mb) + " مگابایت). اگر دانلود خودکار شروع نشد، <a class='again' href='"+url+"' download='"+(cfg.fileName||"book.pdf")+"'>اینجا را بزنید</a>.";
+      setMsg("کد تأیید شد. فایل (" + toFa(mb) + " مگابایت) آماده است – برای ذخیره، دکمهٔ زیر را بزنید.", "ok");
     } catch(err){
       console.error(err);
       setMsg("خطایی رخ داد. لطفاً چند دقیقهٔ دیگر دوباره امتحان کنید.", "err");
